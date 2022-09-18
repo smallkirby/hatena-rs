@@ -36,7 +36,7 @@ impl RequestToken {
     }
   }
 
-  pub fn to_header_string(&self, url: &str, params: Option<&HashMap<&str, &str>>) -> String {
+  fn to_header_string(&self, url: &str, params: Option<&HashMap<&str, &str>>) -> String {
     let mut headers: HashMap<&str, &str> = match params {
       Some(map) => map.clone(),
       None => HashMap::new(),
@@ -98,34 +98,34 @@ impl RequestToken {
   }
 }
 
-pub fn get_request_token() -> Result<OauthTokenResponse, OauthError> {
-  let consumer_key = if let Ok(val) = env::var(ENV_CONSUMER_KEY) {
-    val
-  } else {
-    return Err(OauthError::InsufficientSecret);
-  };
-  let consumer_secret = if let Ok(val) = env::var(ENV_CONSUMER_SECRET) {
-    val
-  } else {
-    return Err(OauthError::InsufficientSecret);
-  };
+/// Get a request token with specified scopes;
+///
+/// # Arguments
+///
+/// * `scopes` - A list of scopes to request
+/// * `consumer_key` - A consumer key for Hatena OAuth
+/// * `consumer_secret` - A consumer secret for Hatena OAuth
+pub fn get_request_token(
+  scopes: &Vec<OauthScope>,
+  consumer_key: &str,
+  consumer_secret: &str,
+) -> Result<OauthTokenResponse, OauthError> {
   let params: HashMap<&str, &str> = vec![("oauth_callback", "oob")].into_iter().collect();
   let req_token = RequestToken::new(&consumer_key, &consumer_secret, None, None);
-  let scopes = vec![
-    "read_public",
-    "write_public",
-    "read_private",
-    "write_private",
-  ];
+  let scopes_str = scopes
+    .iter()
+    .map(|s| format!("{}", s))
+    .collect::<Vec<String>>()
+    .join("&");
 
   let client = reqwest::blocking::Client::new();
   let res = client
-    .post("https://www.hatena.com/oauth/initiate")
+    .post(OAUTH_URL_REQUEST_TOKEN)
     .header(
       AUTHORIZATION,
-      req_token.to_header_string("https://www.hatena.com/oauth/initiate", Some(&params)),
+      req_token.to_header_string(OAUTH_URL_REQUEST_TOKEN, Some(&params)),
     )
-    .body(format!("scope={}", encode(&scopes.join("&")),))
+    .body(format!("scope={}", encode(&scopes_str)))
     .send();
 
   if let Ok(res) = res {
@@ -145,14 +145,19 @@ pub fn get_request_token() -> Result<OauthTokenResponse, OauthError> {
   }
 }
 
-pub fn grant_permission_browser(token: &OauthTokenResponse) -> Result<String, ()> {
-  let result = webbrowser::open(&format!(
-    "https://www.hatena.ne.jp/oauth/authorize?oauth_token={}",
-    token.oauth_token
-  ));
-  if result.is_err() {
-    return Err(());
-  }
+/// Grant a permission from a user to get an access token.
+///
+/// This function opens a browser and waits for a user to grant a permission.
+///
+/// # Arguments
+///
+/// * `token` - A request token returned from request endpoint
+pub fn grant_permission_browser(token: &OauthTokenResponse) -> Result<String, OauthError> {
+  webbrowser::open(&format!(
+    "{}?oauth_token={}",
+    OAUTH_URL_GRANT_PERMISSION, token.oauth_token,
+  ))
+  .map_err(|_| OauthError::PermissionDeniedUser)?;
 
   let mut oauth_verifier = String::new();
   print!(
@@ -162,33 +167,29 @@ pub fn grant_permission_browser(token: &OauthTokenResponse) -> Result<String, ()
   std::io::stdout().flush().unwrap();
   std::io::stdin().read_line(&mut oauth_verifier).unwrap();
 
-  if oauth_verifier.trim().is_empty() {
-    if let Ok(val) = env::var(ENV_OAUTH_VERIFIER) {
-      oauth_verifier = val;
-    } else {
-      return Err(());
-    }
+  oauth_verifier = if oauth_verifier.trim().is_empty() {
+    env::var(ENV_OAUTH_VERIFIER).map_err(|_| OauthError::PermissionDeniedUser)?
   } else {
-    oauth_verifier = oauth_verifier.trim().to_string();
-  }
+    oauth_verifier.trim().to_string()
+  };
 
   Ok(oauth_verifier)
 }
 
+/// Get an access token
+///
+/// # Arguments
+///
+/// * `token` - A request token returned from request endpoint
+/// * `oauth_verifier` - OAuth verifier returned from authorization endpoint
+/// * `consumer_key` - A consumer key for Hatena OAuth
+/// * `consumer_secret` - A consumer secret for Hatena OAuth
 pub fn get_access_token(
   token: &OauthTokenResponse,
   oauth_verifier: &str,
+  consumer_key: &str,
+  consumer_secret: &str,
 ) -> Result<AccessTokenResponse, OauthError> {
-  let consumer_key = if let Ok(val) = env::var(ENV_CONSUMER_KEY) {
-    val
-  } else {
-    return Err(OauthError::InsufficientSecret);
-  };
-  let consumer_secret = if let Ok(val) = env::var(ENV_CONSUMER_SECRET) {
-    val
-  } else {
-    return Err(OauthError::InsufficientSecret);
-  };
   let req_token = RequestToken::new(
     &consumer_key,
     &consumer_secret,
@@ -201,20 +202,17 @@ pub fn get_access_token(
 
   let client = reqwest::blocking::Client::new();
   let res = client
-    .post("https://www.hatena.com/oauth/token")
+    .post(OAUTH_URL_ACCESS_TOKEN)
     .header(
       AUTHORIZATION,
-      req_token.to_header_string("https://www.hatena.com/oauth/token", Some(&params)),
+      req_token.to_header_string(OAUTH_URL_ACCESS_TOKEN, Some(&params)),
     )
     .send();
 
   if let Ok(res) = res {
     if res.status() == 200 {
       let text = res.text()?;
-      match AccessTokenResponse::from(&text) {
-        Ok(token) => Ok(token),
-        Err(e) => Err(e),
-      }
+      Ok(AccessTokenResponse::from(&text).map_err(|e| e)?)
     } else {
       Err(OauthError::InvalidRequest {
         problem: res.text()?,
@@ -222,31 +220,5 @@ pub fn get_access_token(
     }
   } else {
     Err(OauthError::RequestFailure(res.unwrap_err()))
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn test_get_request_token() {
-    let token = get_request_token().unwrap();
-    println!("{:?}", token);
-  }
-
-  #[test]
-  fn test_grant_permission_browser() {
-    let token = get_request_token().unwrap();
-    let oauth_verifier = grant_permission_browser(&token).unwrap();
-    println!("{:?}", oauth_verifier);
-  }
-
-  #[test]
-  fn test_get_access_token() {
-    let token = get_request_token().unwrap();
-    let oauth_verifier = grant_permission_browser(&token).unwrap();
-    let access_token = get_access_token(&token, &oauth_verifier).unwrap();
-    println!("{:?}", access_token);
   }
 }

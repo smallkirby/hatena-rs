@@ -13,4 +13,7 @@ pub enum OauthError {
 
   #[error("HATENA_CONSUMER_KEY or HATENA_CONSUMER_SECRET is not set")]
   InsufficientSecret,
+
+  #[error("permission denied by yourself")]
+  PermissionDeniedUser,
 }

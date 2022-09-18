@@ -46,7 +46,7 @@ impl OauthTokenResponse {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AccessTokenResponse {
   pub oauth_token: String,
   pub oauth_token_secret: String,
