@@ -28,17 +28,26 @@ pub struct HatenaOauth {
 
 impl HatenaOauth {
   /// Create a new OAuth client instance
+  ///
+  /// It gets consumer key and consumer secret from environment variables. If not exist, it returns `InsufficientSecret` error.
+  ///
+  /// It gets cached access token from environment variables if exist.
+  ///
+  /// # Arguments
+  ///
+  /// * `scopes` - Scopes to be requested for the access token
   pub fn new(scopes: Vec<OauthScope>) -> Result<Self, OauthError> {
     let consumer_key = env::var(ENV_CONSUMER_KEY).map_err(|_| OauthError::InsufficientSecret)?;
     let consumer_secret =
       env::var(ENV_CONSUMER_SECRET).map_err(|_| OauthError::InsufficientSecret)?;
+    let access_token = get_access_token_from_env();
 
     Ok(Self {
       consumer_key,
       consumer_secret,
       scopes,
       request_token: None,
-      access_token: None,
+      access_token,
       verifier: None,
     })
   }
@@ -51,19 +60,23 @@ impl HatenaOauth {
   ///
   /// * `force` - If true, this function would request a new access token even if the access token is already cached.
   pub fn get_access_token(&mut self, force: bool) -> Result<AccessTokenResponse, OauthError> {
-    if force || self.request_token.is_none() || self.verifier.is_none() {
+    // Use cached access token if exists
+    if !force && self.access_token.is_some() {
+      return Ok(self.access_token.clone().unwrap());
+    }
+
+    // Use cached request token and verifier if exists
+    if force || (self.request_token.is_none() || self.verifier.is_none()) {
       self.get_request_token()?;
       self.get_verifier()?;
     }
 
-    if force || self.access_token.is_none() {
-      self.access_token = Some(get_access_token(
-        &self.request_token.as_ref().unwrap(),
-        &self.verifier.as_ref().unwrap(),
-        &self.consumer_key,
-        &self.consumer_secret,
-      )?);
-    }
+    self.access_token = Some(get_access_token(
+      &self.request_token.as_ref().unwrap(),
+      &self.verifier.as_ref().unwrap(),
+      &self.consumer_key,
+      &self.consumer_secret,
+    )?);
 
     Ok(self.access_token.as_ref().unwrap().clone())
   }
@@ -84,6 +97,23 @@ impl HatenaOauth {
     )?);
 
     Ok(())
+  }
+}
+
+fn get_access_token_from_env() -> Option<AccessTokenResponse> {
+  let access_token = env::var(ENV_OAUTH_ACCESS_TOKEN).unwrap_or("".into());
+  let access_secret = env::var(ENV_OAUTH_ACCESS_SECRET).unwrap_or("".into());
+  let url_name = env::var(ENV_OAUTH_URL_NAME).unwrap_or("".into());
+
+  if access_token.is_empty() || access_secret.is_empty() || url_name.is_empty() {
+    None
+  } else {
+    Some(AccessTokenResponse {
+      oauth_token: access_token,
+      oauth_token_secret: access_secret,
+      url_name: url_name.clone(),
+      display_name: url_name,
+    })
   }
 }
 
