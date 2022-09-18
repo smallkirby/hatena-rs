@@ -16,6 +16,7 @@ pub const ENV_OAUTH_ACCESS_SECRET: &str = "HATENA_OAUTH_ACCESS_SECRET";
 pub const ENV_OAUTH_URL_NAME: &str = "HATENA_OAUTH_URL_NAME";
 
 pub const OAUTH_URL_REQUEST_TOKEN: &str = "https://www.hatena.com/oauth/initiate";
+//pub const OAUTH_URL_REQUEST_TOKEN: &str = "http://localhost:49494/oauth/initiate";
 pub const OAUTH_URL_GRANT_PERMISSION: &str = "https://www.hatena.com/oauth/authorize";
 pub const OAUTH_URL_ACCESS_TOKEN: &str = "https://www.hatena.com/oauth/token";
 

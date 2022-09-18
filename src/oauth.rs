@@ -1,15 +1,18 @@
-mod consts;
-mod error;
+pub mod consts;
+pub mod error;
 mod oauth;
-mod response;
+pub mod token;
 mod util;
+
+use std::env;
 
 use crate::oauth::consts::*;
 use crate::oauth::error::*;
 use crate::oauth::oauth::*;
-use crate::oauth::response::*;
-use std::env;
+use crate::oauth::token::*;
 
+use reqwest::blocking::Response;
+use reqwest::header::AUTHORIZATION;
 /// OAuth client instance
 pub struct HatenaOauth {
   /// Consumer key
@@ -50,6 +53,70 @@ impl HatenaOauth {
       access_token,
       verifier: None,
     })
+  }
+
+  /// Send GET request with OAuth Acess Token
+  ///
+  /// If access token is not cached, it first fetches access token.
+  ///
+  /// # Arguments
+  ///
+  /// * `url` - URL to send POST request
+  /// * `force` - If true, it fetches access token even if it is cached
+  pub fn get(&mut self, url: &str, force: bool) -> Result<Response, OauthError> {
+    if force || self.access_token.is_none() {
+      self.get_access_token(true)?;
+    }
+
+    let req_token = RequestToken::new(
+      &self.consumer_key,
+      &self.consumer_secret,
+      Some(&self.access_token.as_ref().unwrap().oauth_token),
+      Some(&self.access_token.as_ref().unwrap().oauth_token_secret),
+    );
+    let client = reqwest::blocking::Client::new();
+    let response = client
+      .get(url)
+      .header(
+        AUTHORIZATION,
+        req_token.to_header_string(url, "GET", None, None),
+      )
+      .send()?;
+
+    Ok(response)
+  }
+
+  /// Send POST request with OAuth Acess Token
+  ///
+  /// If access token is not cached, it first fetches access token.
+  ///
+  /// # Arguments
+  ///
+  /// * `url` - URL to send POST request
+  /// * `body` - body of POST request to send
+  /// * `force` - If true, it fetches access token even if it is cached
+  pub fn post(&mut self, url: &str, body: &str, force: bool) -> Result<Response, OauthError> {
+    if force || self.access_token.is_none() {
+      self.get_access_token(true)?;
+    }
+
+    let req_token = RequestToken::new(
+      &self.consumer_key,
+      &self.consumer_secret,
+      Some(&self.access_token.as_ref().unwrap().oauth_token),
+      Some(&self.access_token.as_ref().unwrap().oauth_token_secret),
+    );
+    let client = reqwest::blocking::Client::new();
+    let response = client
+      .post(url)
+      .header(
+        AUTHORIZATION,
+        req_token.to_header_string(url, "POST", None, Some("")),
+      ) // XXX
+      .body(body.to_string())
+      .send()?;
+
+    Ok(response)
   }
 
   /// Get an access token for pre-defined scopes.

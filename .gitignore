@@ -2,3 +2,5 @@
 /Cargo.lock
 .env
 .vscode
+test.png
+test.py

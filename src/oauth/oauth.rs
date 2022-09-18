@@ -5,16 +5,16 @@ use std::io::Write;
 use chrono::Utc;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use reqwest::header::AUTHORIZATION;
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use ring::hmac::{self, HMAC_SHA1_FOR_LEGACY_USE_ONLY};
 use webbrowser;
 
 use crate::oauth::consts::*;
 use crate::oauth::error::*;
-use crate::oauth::response::*;
+use crate::oauth::token::*;
 use crate::oauth::util::*;
 
-struct RequestToken {
+pub struct RequestToken {
   consumer_key: String,
   consumer_secret: String,
   oauth_token: Option<String>,
@@ -36,7 +36,13 @@ impl RequestToken {
     }
   }
 
-  fn to_header_string(&self, url: &str, params: Option<&HashMap<&str, &str>>) -> String {
+  pub fn to_header_string(
+    &self,
+    url: &str,
+    method: &str,
+    params: Option<&HashMap<&str, &str>>,
+    body: Option<&str>,
+  ) -> String {
     let mut headers: HashMap<&str, &str> = match params {
       Some(map) => map.clone(),
       None => HashMap::new(),
@@ -57,7 +63,20 @@ impl RequestToken {
       headers.insert("oauth_token", oauth_token);
     }
 
-    let signature = self.get_signature(url, &headers);
+    let mut params_for_signature = headers.clone();
+    if body.is_some() {
+      let body = body.unwrap();
+      for pair in body.split('&') {
+        let mut parts = pair.split('=');
+        let key = parts.next();
+        let value = parts.next();
+        if key.is_none() || value.is_none() {
+          continue;
+        }
+        params_for_signature.insert(key.unwrap(), value.unwrap());
+      }
+    }
+    let signature = self.get_signature(url, method, &params_for_signature);
     headers.insert("oauth_signature", &signature);
 
     let mut header_strs = headers
@@ -70,7 +89,7 @@ impl RequestToken {
     format!("OAuth {}", header_strs.join(", "),)
   }
 
-  fn get_signature(&self, url: &str, params: &HashMap<&str, &str>) -> String {
+  fn get_signature(&self, url: &str, method: &str, params: &HashMap<&str, &str>) -> String {
     let key = format!(
       "{}&{}",
       encode(&self.consumer_secret),
@@ -79,14 +98,13 @@ impl RequestToken {
 
     let mut sorted_params: Vec<_> = params
       .iter()
-      .filter(|&(k, _)| k.starts_with("oauth_"))
       .map(|(k, v)| format!("{}={}", encode(k), encode(v),))
       .collect::<Vec<String>>();
     sorted_params.sort();
 
     let base_string = format!(
       "{}&{}&{}",
-      encode("POST"),
+      encode(method),
       encode(url),
       encode(&sorted_params.join("&")),
     );
@@ -116,15 +134,21 @@ pub fn get_request_token(
     .iter()
     .map(|s| format!("{}", s))
     .collect::<Vec<String>>()
-    .join("&");
+    .join(",");
 
   let client = reqwest::blocking::Client::new();
   let res = client
     .post(OAUTH_URL_REQUEST_TOKEN)
     .header(
       AUTHORIZATION,
-      req_token.to_header_string(OAUTH_URL_REQUEST_TOKEN, Some(&params)),
+      req_token.to_header_string(
+        OAUTH_URL_REQUEST_TOKEN,
+        "POST",
+        Some(&params),
+        Some(&format!("scope={}", scopes_str)),
+      ),
     )
+    .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
     .body(format!("scope={}", encode(&scopes_str)))
     .send();
 
@@ -205,7 +229,7 @@ pub fn get_access_token(
     .post(OAUTH_URL_ACCESS_TOKEN)
     .header(
       AUTHORIZATION,
-      req_token.to_header_string(OAUTH_URL_ACCESS_TOKEN, Some(&params)),
+      req_token.to_header_string(OAUTH_URL_ACCESS_TOKEN, "POST", Some(&params), None),
     )
     .send();
 
