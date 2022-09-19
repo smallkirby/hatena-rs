@@ -21,4 +21,4 @@ jobs:
       run: cargo fmt -- --check
 
     - name: Build
-      run: cargo run
+      run: cargo build
