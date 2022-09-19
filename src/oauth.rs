@@ -27,6 +27,8 @@ pub struct HatenaOauth {
   access_token: Option<AccessTokenResponse>,
   /// Cache of oauth verifier
   verifier: Option<String>,
+  /// Callback after redirecting user to grant permission
+  grant_permission_callback: fn() -> Result<String, OauthError>,
 }
 
 impl HatenaOauth {
@@ -39,11 +41,20 @@ impl HatenaOauth {
   /// # Arguments
   ///
   /// * `scopes` - Scopes to be requested for the access token
-  pub fn new(scopes: Vec<OauthScope>) -> Result<Self, OauthError> {
+  /// * `grant_permission_callback` - Callback after redirecting user to grant permission, which prompts user to input a given token
+  pub fn new(
+    scopes: Vec<OauthScope>,
+    grant_permission_callback: Option<fn() -> Result<String, OauthError>>,
+  ) -> Result<Self, OauthError> {
     let consumer_key = env::var(ENV_CONSUMER_KEY).map_err(|_| OauthError::InsufficientSecret)?;
     let consumer_secret =
       env::var(ENV_CONSUMER_SECRET).map_err(|_| OauthError::InsufficientSecret)?;
     let access_token = get_access_token_from_env();
+    let callback = if let Some(callback) = grant_permission_callback {
+      callback
+    } else {
+      || grant_permission_default_callback()
+    };
 
     Ok(Self {
       consumer_key,
@@ -52,6 +63,7 @@ impl HatenaOauth {
       request_token: None,
       access_token,
       verifier: None,
+      grant_permission_callback: callback,
     })
   }
 
@@ -161,6 +173,7 @@ impl HatenaOauth {
   fn get_verifier(&mut self) -> Result<(), OauthError> {
     self.verifier = Some(grant_permission_browser(
       &self.request_token.as_ref().unwrap(),
+      self.grant_permission_callback,
     )?);
 
     Ok(())
@@ -190,7 +203,7 @@ mod tests {
 
   #[test]
   fn test_get_access_token() {
-    let mut oauth = HatenaOauth::new(vec![OauthScope::ReadPublic]).unwrap();
+    let mut oauth = HatenaOauth::new(vec![OauthScope::ReadPublic], None).unwrap();
     let token = oauth.get_access_token(false).unwrap();
     println!("{:?}", token);
   }

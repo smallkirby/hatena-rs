@@ -176,13 +176,21 @@ pub fn get_request_token(
 /// # Arguments
 ///
 /// * `token` - A request token returned from request endpoint
-pub fn grant_permission_browser(token: &OauthTokenResponse) -> Result<String, OauthError> {
+/// * `callback` - A callback function after redirecting a user to grants a permission, which prompts user to enter a token.
+pub fn grant_permission_browser(
+  token: &OauthTokenResponse,
+  callback: fn() -> Result<String, OauthError>,
+) -> Result<String, OauthError> {
   webbrowser::open(&format!(
     "{}?oauth_token={}",
     OAUTH_URL_GRANT_PERMISSION, token.oauth_token,
   ))
   .map_err(|_| OauthError::PermissionDeniedUser)?;
 
+  Ok(callback()?)
+}
+
+pub fn grant_permission_default_callback() -> Result<String, OauthError> {
   let mut oauth_verifier = String::new();
   print!(
     "Input token printed on the browser (or, 'set {}=<token>' and Enter): ",
@@ -191,13 +199,11 @@ pub fn grant_permission_browser(token: &OauthTokenResponse) -> Result<String, Oa
   std::io::stdout().flush().unwrap();
   std::io::stdin().read_line(&mut oauth_verifier).unwrap();
 
-  oauth_verifier = if oauth_verifier.trim().is_empty() {
-    env::var(ENV_OAUTH_VERIFIER).map_err(|_| OauthError::PermissionDeniedUser)?
+  if oauth_verifier.trim().is_empty() {
+    Ok(env::var(ENV_OAUTH_VERIFIER).map_err(|_| OauthError::PermissionDeniedUser)?)
   } else {
-    oauth_verifier.trim().to_string()
-  };
-
-  Ok(oauth_verifier)
+    Ok(oauth_verifier.trim().to_string())
+  }
 }
 
 /// Get an access token

@@ -74,7 +74,12 @@ impl Fotolife {
     Ok(())
   }
 
-  fn generate_post_xml(&self, image_path: &Path, title: &str, generator: &str) -> Result<String, FotolifeError> {
+  fn generate_post_xml(
+    &self,
+    image_path: &Path,
+    title: &str,
+    generator: &str,
+  ) -> Result<String, FotolifeError> {
     if !image_path.exists() || !image_path.is_file() {
       return Err(FotolifeError::ResourceNotFound {
         resource: image_path.to_string_lossy().to_string(),
@@ -112,12 +117,15 @@ mod tests {
 
   #[test]
   fn test_post_image() {
-    let oauth = HatenaOauth::new(vec![
-      OauthScope::WritePublic,
-      OauthScope::WritePrivate,
-      OauthScope::ReadPublic,
-      OauthScope::ReadPrivate,
-    ])
+    let oauth = HatenaOauth::new(
+      vec![
+        OauthScope::WritePublic,
+        OauthScope::WritePrivate,
+        OauthScope::ReadPublic,
+        OauthScope::ReadPrivate,
+      ],
+      None,
+    )
     .unwrap();
     let mut fotolife = Fotolife::new(oauth);
 
@@ -129,12 +137,15 @@ mod tests {
 
   #[test]
   fn test_get_image() {
-    let oauth = HatenaOauth::new(vec![
-      OauthScope::WritePublic,
-      OauthScope::WritePrivate,
-      OauthScope::ReadPublic,
-      OauthScope::ReadPrivate,
-    ])
+    let oauth = HatenaOauth::new(
+      vec![
+        OauthScope::WritePublic,
+        OauthScope::WritePrivate,
+        OauthScope::ReadPublic,
+        OauthScope::ReadPrivate,
+      ],
+      None,
+    )
     .unwrap();
     let mut fotolife = Fotolife::new(oauth);
 
