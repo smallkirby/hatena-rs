@@ -12,7 +12,7 @@ use crate::oauth::HatenaOauth;
 
 /// Hatena Fotolife client instance
 pub struct Fotolife {
-  // access token
+  // OAuth manager client
   oauth: HatenaOauth,
 }
 
@@ -37,8 +37,8 @@ impl Fotolife {
     image_path: &Path,
     title: &str,
   ) -> Result<FotolifePostResponse, FotolifeError> {
-    let xml = self.generate_post_xml(image_path, title)?;
-    let res = self.oauth.post(FOTOLIFE_URL_POST, &xml, false)?; // XXX
+    let xml = self.generate_post_xml(image_path, title, "hatena-rs")?;
+    let res = self.oauth.post(FOTOLIFE_URL_POST, &xml, false)?;
 
     if res.status().is_success() {
       let location = res
@@ -74,7 +74,7 @@ impl Fotolife {
     Ok(())
   }
 
-  fn generate_post_xml(&self, image_path: &Path, title: &str) -> Result<String, FotolifeError> {
+  fn generate_post_xml(&self, image_path: &Path, title: &str, generator: &str) -> Result<String, FotolifeError> {
     if !image_path.exists() || !image_path.is_file() {
       return Err(FotolifeError::ResourceNotFound {
         resource: image_path.to_string_lossy().to_string(),
@@ -96,9 +96,10 @@ impl Fotolife {
         <entry xmlns="http://purl.org/atom/ns#">
           <title>{}</title>
           <content mode="base64" type="{}">{}</content>
+          <generator>{}</generator>
         </entry>
       "#,
-      title, typestr, encoded_image,
+      title, typestr, encoded_image, generator,
     ))
   }
 }
