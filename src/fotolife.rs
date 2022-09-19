@@ -32,13 +32,15 @@ impl Fotolife {
   ///
   /// * `image_path`: Path to the image file to upload
   /// * `title` - Title of the photo
+  /// * `timeout` - Timeout in seconds
   pub fn post_image(
     &mut self,
     image_path: &Path,
     title: &str,
+    timeout: u64,
   ) -> Result<FotolifePostResponse, FotolifeError> {
     let xml = self.generate_post_xml(image_path, title, "hatena-rs")?;
-    let res = self.oauth.post(FOTOLIFE_URL_POST, &xml, false)?;
+    let res = self.oauth.post(FOTOLIFE_URL_POST, &xml, false, timeout)?;
 
     if res.status().is_success() {
       let location = res
@@ -130,7 +132,7 @@ mod tests {
     let mut fotolife = Fotolife::new(oauth);
 
     let res = fotolife
-      .post_image(Path::new("test.png"), "test rust")
+      .post_image(Path::new("test.png"), "test rust", 10)
       .unwrap();
     println!("{:?}", res);
   }

@@ -73,7 +73,7 @@ impl HatenaOauth {
   ///
   /// # Arguments
   ///
-  /// * `url` - URL to send POST request
+  /// * `url` - URL to send GET request
   /// * `force` - If true, it fetches access token even if it is cached
   pub fn get(&mut self, url: &str, force: bool) -> Result<Response, OauthError> {
     if force || self.access_token.is_none() {
@@ -107,7 +107,14 @@ impl HatenaOauth {
   /// * `url` - URL to send POST request
   /// * `body` - body of POST request to send
   /// * `force` - If true, it fetches access token even if it is cached
-  pub fn post(&mut self, url: &str, body: &str, force: bool) -> Result<Response, OauthError> {
+  /// * `timeout` - Timeout in seconds
+  pub fn post(
+    &mut self,
+    url: &str,
+    body: &str,
+    force: bool,
+    timeout: u64,
+  ) -> Result<Response, OauthError> {
     if force || self.access_token.is_none() {
       self.get_access_token(true)?;
     }
@@ -121,6 +128,7 @@ impl HatenaOauth {
     let client = reqwest::blocking::Client::new();
     let response = client
       .post(url)
+      .timeout(std::time::Duration::from_secs(timeout))
       .header(
         AUTHORIZATION,
         req_token.to_header_string(url, "POST", None, Some("")),
