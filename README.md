@@ -16,3 +16,23 @@ For the specifications of each API, refer to [Hatena Developer Center](https://d
 | ⛈️ | [Hatena Blog](https://developer.hatena.ne.jp/ja/documents/blog/) |  |
 | ⛈️ | [Mackerel](https://developer.hatena.ne.jp/ja/documents/mackerel) |  |
 | ⛈️ | [Hatena Bookmark](https://developer.hatena.ne.jp/ja/documents/bookmark/) |  |
+
+## Usage
+
+```rs
+# OAuth
+use hatena_rs::oauth::{HatenaOauth, consts::OauthScope};
+let scopes = vec![
+  OauthScope::WritePublic,
+  OauthScope::WritePrivate,
+  OauthScope::ReadPublic,
+  OauthScope::ReadPrivate,
+];
+let mut oauth = HatenaOauth::new(scopes, None)?;
+let access_token = oauth.get_access_token(true)?;
+
+# Fotolife
+use hatena_rs::fotolife::Fotolife;
+let fotolife = Fotolife::new(oauth);
+fotolife.post_image("./kirby.png", "title", 30)?;
+```
