@@ -88,6 +88,8 @@ impl Fotolife {
   /// # Arguments
   ///
   /// * `path` - Path to list images
+  /// * `cookie` - logged-in Cookie named `rk`
+  /// * `username` - Hatena username. If not specified, it uses OAuth API to fetch username.
   ///
   ///
   pub fn list_images_directory(
