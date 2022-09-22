@@ -13,4 +13,7 @@ pub enum FotolifeError {
 
   #[error("failed to upload image (status={status:?})")]
   UploadFailure { status: StatusCode },
+
+  #[error("request failed")]
+  HttpFailure(#[from] reqwest::Error),
 }

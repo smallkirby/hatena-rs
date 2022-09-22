@@ -10,6 +10,9 @@ use crate::fotolife::error::*;
 use crate::fotolife::fotolife::*;
 use crate::oauth::HatenaOauth;
 
+use reqwest::StatusCode;
+use scraper::{Html, Selector};
+
 /// Hatena Fotolife client instance
 pub struct Fotolife {
   // OAuth manager client
@@ -76,6 +79,49 @@ impl Fotolife {
     Ok(())
   }
 
+  /// List image in specific `path` of user's Fotolife using Cookie.
+  ///
+  /// When success, returns a list of image IDs.
+  ///
+  /// Note that this doesn't use API and needs Cookie (`rk`).
+  ///
+  /// # Arguments
+  ///
+  /// * `path` - Path to list images
+  ///
+  ///
+  pub fn list_images_directory(
+    &mut self,
+    path: &str,
+    cookie: &str,
+    username: Option<&str>,
+  ) -> Result<Vec<String>, FotolifeError> {
+    let username = if username.is_none() {
+      let me_info = self.oauth.get_access_token(false)?;
+      me_info.url_name
+    } else {
+      username.unwrap().into()
+    };
+
+    let url = format!("{}/{}/{}/", FOTOLIFE_URL_LIST, username, path);
+    let res = reqwest::blocking::Client::new()
+      .get(&url)
+      .header("Cookie", format!("rk={}", cookie))
+      .send()?;
+
+    match res.status() {
+      StatusCode::OK => {
+        let body = res.text().unwrap();
+        let image_ids = self.parse_photolist_html(&body, &username);
+        Ok(image_ids)
+      }
+      StatusCode::NOT_FOUND => Ok(vec![]),
+      _ => Err(FotolifeError::UploadFailure {
+        status: res.status(),
+      }),
+    }
+  }
+
   fn generate_post_xml(
     &self,
     image_path: &Path,
@@ -108,6 +154,31 @@ impl Fotolife {
       "#,
       title, typestr, encoded_image, generator,
     ))
+  }
+
+  fn parse_photolist_html(&self, html: &str, user_name: &str) -> Vec<String> {
+    let mut photos = vec![];
+    let document = Html::parse_document(html);
+    let selector = Selector::parse("img.foto_thumb").unwrap();
+
+    for element in document.select(&selector) {
+      let a_elem = if let Some(a_elem) = element.parent() {
+        a_elem.value().as_element().unwrap()
+      } else {
+        continue;
+      };
+      let href = if let Some(href) = a_elem.attr("href") {
+        href
+      } else {
+        continue;
+      };
+      if href.starts_with(&format!("/{}/", user_name)) {
+        let id = href.split("/").last().unwrap();
+        photos.push(id.into());
+      }
+    }
+
+    photos
   }
 }
 
@@ -152,5 +223,26 @@ mod tests {
     let mut fotolife = Fotolife::new(oauth);
 
     fotolife.get_image("hogehoge").unwrap();
+  }
+
+  #[test]
+  fn test_list_photos() {
+    let oauth = HatenaOauth::new(
+      vec![
+        OauthScope::WritePublic,
+        OauthScope::WritePrivate,
+        OauthScope::ReadPublic,
+        OauthScope::ReadPrivate,
+      ],
+      None,
+    )
+    .unwrap();
+    let mut fotolife = Fotolife::new(oauth);
+    let cookie = std::env::var("FOTOLIFE_COOKIE").unwrap();
+
+    let ids = fotolife
+      .list_images_directory("hatena-rs", &cookie, Some("smallkirby"))
+      .unwrap();
+    println!("{:?}", ids);
   }
 }
