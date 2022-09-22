@@ -16,7 +16,7 @@ use scraper::{Html, Selector};
 /// Hatena Fotolife client instance
 pub struct Fotolife {
   // OAuth manager client
-  oauth: HatenaOauth,
+  pub oauth: HatenaOauth,
 }
 
 impl Fotolife {
