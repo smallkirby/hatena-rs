@@ -24,6 +24,13 @@ pub struct HatenaConsumerInfo {
 }
 
 impl HatenaConsumerInfo {
+  pub fn new(consumer_key: &str, consumer_secret: &str) -> Result<Self, OauthError> {
+    Ok(Self {
+      consumer_key: consumer_key.to_string(),
+      consumer_secret: consumer_secret.to_string(),
+    })
+  }
+
   pub fn from_env() -> Result<Self, OauthError> {
     let consumer_key =
       env::var("HATENA_CONSUMER_KEY").map_err(|_| OauthError::InsufficientSecret)?;
