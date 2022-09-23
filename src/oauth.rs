@@ -13,12 +13,33 @@ use crate::oauth::token::*;
 
 use reqwest::blocking::Response;
 use reqwest::header::AUTHORIZATION;
-/// OAuth client instance
-pub struct HatenaOauth {
+
+/// OAuth key info
+#[derive(Debug, Clone)]
+pub struct HatenaConsumerInfo {
   /// Consumer key
   consumer_key: String,
   /// Consumer secret
   consumer_secret: String,
+}
+
+impl HatenaConsumerInfo {
+  pub fn from_env() -> Result<Self, OauthError> {
+    let consumer_key =
+      env::var("HATENA_CONSUMER_KEY").map_err(|_| OauthError::InsufficientSecret)?;
+    let consumer_secret =
+      env::var("HATENA_CONSUMER_SECRET").map_err(|_| OauthError::InsufficientSecret)?;
+
+    Ok(Self {
+      consumer_key,
+      consumer_secret,
+    })
+  }
+}
+
+/// OAuth client instance
+pub struct HatenaOauth {
+  consumer_info: HatenaConsumerInfo,
   /// Scopes granted for the access token
   scopes: Vec<OauthScope>,
   /// Cache of request token response
@@ -42,13 +63,12 @@ impl HatenaOauth {
   ///
   /// * `scopes` - Scopes to be requested for the access token
   /// * `grant_permission_callback` - Callback after redirecting user to grant permission, which prompts user to input a given token
+  /// * `consumer_info` - A consumer info for Hatena OAuth
   pub fn new(
     scopes: Vec<OauthScope>,
     grant_permission_callback: Option<fn() -> Result<String, OauthError>>,
+    consumer_info: HatenaConsumerInfo,
   ) -> Result<Self, OauthError> {
-    let consumer_key = env::var(ENV_CONSUMER_KEY).map_err(|_| OauthError::InsufficientSecret)?;
-    let consumer_secret =
-      env::var(ENV_CONSUMER_SECRET).map_err(|_| OauthError::InsufficientSecret)?;
     let access_token = get_access_token_from_env();
     let callback = if let Some(callback) = grant_permission_callback {
       callback
@@ -57,8 +77,7 @@ impl HatenaOauth {
     };
 
     Ok(Self {
-      consumer_key,
-      consumer_secret,
+      consumer_info,
       scopes,
       request_token: None,
       access_token,
@@ -81,8 +100,8 @@ impl HatenaOauth {
     }
 
     let req_token = RequestToken::new(
-      &self.consumer_key,
-      &self.consumer_secret,
+      &self.consumer_info.consumer_key,
+      &self.consumer_info.consumer_secret,
       Some(&self.access_token.as_ref().unwrap().oauth_token),
       Some(&self.access_token.as_ref().unwrap().oauth_token_secret),
     );
@@ -120,8 +139,8 @@ impl HatenaOauth {
     }
 
     let req_token = RequestToken::new(
-      &self.consumer_key,
-      &self.consumer_secret,
+      &self.consumer_info.consumer_key,
+      &self.consumer_info.consumer_secret,
       Some(&self.access_token.as_ref().unwrap().oauth_token),
       Some(&self.access_token.as_ref().unwrap().oauth_token_secret),
     );
@@ -161,8 +180,8 @@ impl HatenaOauth {
     self.access_token = Some(get_access_token(
       &self.request_token.as_ref().unwrap(),
       &self.verifier.as_ref().unwrap(),
-      &self.consumer_key,
-      &self.consumer_secret,
+      &self.consumer_info.consumer_key,
+      &self.consumer_info.consumer_secret,
     )?);
 
     Ok(self.access_token.as_ref().unwrap().clone())
@@ -171,8 +190,8 @@ impl HatenaOauth {
   fn get_request_token(&mut self) -> Result<(), OauthError> {
     self.request_token = Some(get_request_token(
       &self.scopes,
-      &self.consumer_key,
-      &self.consumer_secret,
+      &self.consumer_info.consumer_key,
+      &self.consumer_info.consumer_secret,
     )?);
 
     Ok(())
@@ -211,7 +230,8 @@ mod tests {
 
   #[test]
   fn test_get_access_token() {
-    let mut oauth = HatenaOauth::new(vec![OauthScope::ReadPublic], None).unwrap();
+    let consumer_info = HatenaConsumerInfo::from_env().unwrap();
+    let mut oauth = HatenaOauth::new(vec![OauthScope::ReadPublic], None, consumer_info).unwrap();
     let token = oauth.get_access_token(false).unwrap();
     println!("{:?}", token);
   }

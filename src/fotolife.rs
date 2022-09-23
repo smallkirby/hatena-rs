@@ -70,6 +70,7 @@ impl Fotolife {
   /// # Arguments
   ///
   /// * `image_id` - ID of the image to get
+  #[allow(dead_code)]
   pub fn get_image(&mut self, photo_id: &str) -> Result<(), FotolifeError> {
     let url = format!("{}/{}", FOTOLIFE_URL_EDIT, photo_id);
     let res = self.oauth.get(&url, false)?; // XXX
@@ -188,10 +189,11 @@ impl Fotolife {
 mod tests {
   use super::*;
   use crate::oauth::consts::OauthScope;
-  use crate::oauth::HatenaOauth;
+  use crate::oauth::{HatenaConsumerInfo, HatenaOauth};
 
   #[test]
   fn test_post_image() {
+    let consumer_info = HatenaConsumerInfo::from_env().unwrap();
     let oauth = HatenaOauth::new(
       vec![
         OauthScope::WritePublic,
@@ -200,6 +202,7 @@ mod tests {
         OauthScope::ReadPrivate,
       ],
       None,
+      consumer_info,
     )
     .unwrap();
     let mut fotolife = Fotolife::new(oauth);
@@ -212,6 +215,7 @@ mod tests {
 
   #[test]
   fn test_get_image() {
+    let consumer_info = HatenaConsumerInfo::from_env().unwrap();
     let oauth = HatenaOauth::new(
       vec![
         OauthScope::WritePublic,
@@ -220,6 +224,7 @@ mod tests {
         OauthScope::ReadPrivate,
       ],
       None,
+      consumer_info,
     )
     .unwrap();
     let mut fotolife = Fotolife::new(oauth);
@@ -229,6 +234,7 @@ mod tests {
 
   #[test]
   fn test_list_photos() {
+    let consumer_info = HatenaConsumerInfo::from_env().unwrap();
     let oauth = HatenaOauth::new(
       vec![
         OauthScope::WritePublic,
@@ -237,6 +243,7 @@ mod tests {
         OauthScope::ReadPrivate,
       ],
       None,
+      consumer_info,
     )
     .unwrap();
     let mut fotolife = Fotolife::new(oauth);
